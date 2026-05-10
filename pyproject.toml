@@ -1,0 +1,12 @@
+[project]
+name = "mii-wakeup"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "nuitka>=4.0.8",
+    "numpy>=2.4.4",
+    "openwakeword>=0.4.0",
+    "sounddevice>=0.5.5",
+]
