@@ -47,6 +47,8 @@ def load_openwakeword_model(
                 "This openWakeWord version does not expose a supported custom "
                 "model-path parameter."
             )
+    else:
+        _ensure_bundled_wake_models_available()
 
     # Newer openWakeWord versions default to tflite on Linux. mii-wakeup is
     # intentionally ONNX-first because users pass custom .onnx wake-word models.
@@ -77,3 +79,21 @@ def _install_openwakeword_training_stub() -> None:
 
     stub.train_custom_verifier = train_custom_verifier
     sys.modules["openwakeword.custom_verifier_model"] = stub
+
+
+def _ensure_bundled_wake_models_available() -> None:
+    try:
+        import openwakeword
+    except Exception as exc:
+        raise ModelLoadError(f"Could not inspect openWakeWord models: {exc}") from exc
+
+    missing_models = [
+        str(model_path)
+        for model_path in openwakeword.get_pretrained_model_paths()
+        if not Path(model_path).is_file()
+    ]
+    if missing_models:
+        raise ModelLoadError(
+            "This build does not include openWakeWord's built-in wake-word "
+            "models. Pass a custom model with --model."
+        )

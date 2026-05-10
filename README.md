@@ -28,7 +28,9 @@ uv run mii-wakeup --model ./hey_meee.onnx --continuous --output json
 uv run mii-wakeup --list-devices
 ```
 
-If `--model` is omitted, openWakeWord loads its bundled pre-trained models.
+When running from the uv environment, omitting `--model` lets openWakeWord load
+its bundled pre-trained wake-word models. The slim Nuitka build below excludes
+those demo wake-word models, so packaged binaries should be run with `--model`.
 Custom `.onnx` models can be provided more than once with repeated `--model`
 flags.
 
@@ -53,21 +55,23 @@ uv run mii-wakeup --model ./hey_meee.onnx --input ./sample.wav
 ## Nuitka
 
 The package is structured so it can be compiled as a one-file executable. The
-build command explicitly includes `openwakeword` package data, which is where
-openWakeWord keeps its bundled ONNX support models. It also excludes
-openWakeWord's training/custom-verifier path because mii-wakeup only performs
-runtime wake detection.
+build command explicitly includes only openWakeWord's runtime support models.
+It excludes openWakeWord's demo wake-word models and training/custom-verifier
+path because packaged mii-wakeup expects users to pass their wake-word `.onnx`
+with `--model`.
 
 ```sh
 uv run python -m nuitka \
   --mode=onefile \
   --output-dir=dist \
   --output-filename=mii-wakeup \
-  --include-package-data=openwakeword \
+  --include-data-files=.venv/lib/python3.13/site-packages/openwakeword/resources/models/melspectrogram.onnx=openwakeword/resources/models/melspectrogram.onnx \
+  --include-data-files=.venv/lib/python3.13/site-packages/openwakeword/resources/models/embedding_model.onnx=openwakeword/resources/models/embedding_model.onnx \
+  --include-data-files=.venv/lib/python3.13/site-packages/openwakeword/resources/models/silero_vad.onnx=openwakeword/resources/models/silero_vad.onnx \
+  --include-data-files=.venv/lib/python3.13/site-packages/onnxruntime/capi/libonnxruntime_providers_shared.so=onnxruntime/capi/libonnxruntime_providers_shared.so \
   --include-module=openwakeword.model \
   --include-module=openwakeword.utils \
   --include-module=openwakeword.vad \
-  --include-package=onnxruntime \
   --include-package=sounddevice \
   --include-package=mii_wakeup \
   --nofollow-import-to=openwakeword.custom_verifier_model \
@@ -76,7 +80,12 @@ uv run python -m nuitka \
   --nofollow-import-to=joblib \
   --nofollow-import-to=tqdm \
   --nofollow-import-to=onnxruntime.backend \
+  --nofollow-import-to=onnxruntime.tools \
+  --nofollow-import-to=onnxruntime.quantization \
+  --nofollow-import-to=onnxruntime.transformers \
   --noinclude-unittest-mode=nofollow \
+  --python-flag=no_docstrings \
+  --python-flag=no_asserts \
   main.py
 ```
 
