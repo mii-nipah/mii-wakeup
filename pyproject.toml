@@ -1,12 +1,28 @@
 [project]
 name = "mii-wakeup"
 version = "0.1.0"
-description = "Add your description here"
+description = "Tiny Unix-style openWakeWord wake-word listener"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "nuitka>=4.0.8",
     "numpy>=2.4.4",
     "openwakeword>=0.4.0",
     "sounddevice>=0.5.5",
+]
+
+[project.scripts]
+mii-wakeup = "mii_wakeup.cli:main"
+
+[build-system]
+requires = ["setuptools>=80"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[dependency-groups]
+dev = [
+    "nuitka>=4.0.8",
+    "patchelf>=0.17.2.4",
+    "zstandard>=0.25.0",
 ]
