@@ -4,7 +4,7 @@ Tiny Unix-style wake-word listener built on
 [openWakeWord](https://github.com/dscripka/openWakeWord).
 
 The default behavior is intentionally pipe-friendly: listen until a wake word is
-detected, print one event line on stdout, then exit.
+detected, print the confidence score on stdout, then exit.
 
 ```sh
 uv run mii-wakeup --model /home/nipah/Downloads/ai/weights/hey_meee.onnx \
@@ -24,7 +24,8 @@ uv run mii-wakeup --model /home/nipah/Downloads/ai/weights/hey_meee.onnx |
 
 ```sh
 uv run mii-wakeup --model ./hey_meee.onnx
-uv run mii-wakeup --model ./hey_meee.onnx --continuous --output json
+uv run mii-wakeup --model ./hey_meee.onnx --stream
+uv run mii-wakeup --model ./hey_meee.onnx --stream --output json
 uv run mii-wakeup --list-devices
 ```
 
@@ -51,6 +52,21 @@ arecord -q -r 16000 -f S16_LE -c 1 |
 
 uv run mii-wakeup --model ./hey_meee.onnx --input ./sample.wav
 ```
+
+## Embedded Clones
+
+A built binary can create a single-file clone that carries both mii-wakeup and
+your wake-word model:
+
+```sh
+./dist/mii-wakeup --model ./hey_meee.onnx --embed ./mii-wakeup-hey-meee
+./mii-wakeup-hey-meee --stream
+```
+
+The embedded clone is a POSIX shell executable. It extracts the bundled binary
+and model into a temporary directory, runs mii-wakeup with the embedded
+`--model`, then cleans up when the process exits. Use `--force` with `--embed`
+to overwrite an existing output file.
 
 ## Nuitka
 

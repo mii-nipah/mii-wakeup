@@ -21,4 +21,4 @@ def render_event(event: WakeEvent, output_format: OutputFormat) -> str:
             separators=(",", ":"),
         )
 
-    return f"{event.label}\t{event.score:.3f}"
+    return f"{event.score:.6f}"

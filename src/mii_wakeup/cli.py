@@ -21,6 +21,7 @@ from .audio import (
     wav_frames,
 )
 from .detection import DetectionConfig, iter_wake_events
+from .embed import EmbedError, create_embedded_clone, default_embedded_output_path
 from .openwakeword_adapter import ModelLoadError, load_openwakeword_model
 from .output import render_event
 
@@ -35,6 +36,21 @@ def main(argv: list[str] | None = None) -> int:
             print(format_input_devices())
         except AudioDeviceError as exc:
             parser.exit(2, f"mii-wakeup: {exc}\n")
+        return 0
+
+    if args.embed is not None:
+        try:
+            output_path = _embed_output_path(args.embed)
+            created_path = create_embedded_clone(
+                executable_path=Path(sys.argv[0]),
+                model_paths=args.model,
+                output_path=output_path,
+                force=args.force,
+            )
+        except EmbedError as exc:
+            parser.exit(2, f"mii-wakeup: {exc}\n")
+
+        print(created_path)
         return 0
 
     try:
@@ -53,7 +69,7 @@ def main(argv: list[str] | None = None) -> int:
     config = DetectionConfig(
         threshold=args.threshold,
         cooldown_seconds=args.cooldown,
-        max_events=None if args.continuous else 1,
+        max_events=None if args.stream or args.continuous else 1,
     )
 
     try:
@@ -90,6 +106,22 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=[],
         help="Path to a custom .onnx wake-word model. Can be provided more than once.",
+    )
+    parser.add_argument(
+        "--embed",
+        nargs="?",
+        const="",
+        default=None,
+        metavar="OUTPUT",
+        help=(
+            "Create an executable clone with the selected --model files embedded "
+            "and exit. Defaults to './<this-binary>-embedded'."
+        ),
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Allow --embed to overwrite the output file.",
     )
     parser.add_argument(
         "--input",
@@ -140,13 +172,18 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--continuous",
         action="store_true",
-        help="Keep listening and print one line per wake event instead of exiting after the first.",
+        help="Alias for --stream.",
+    )
+    parser.add_argument(
+        "--stream",
+        action="store_true",
+        help="Keep listening and print one confidence value per wake activation.",
     )
     parser.add_argument(
         "--output",
         choices=("text", "json"),
         default="text",
-        help="Event output format. Text is '<label>\\t<score>'.",
+        help="Event output format. Text is '<score>'.",
     )
     parser.add_argument(
         "--print-scores",
@@ -181,6 +218,12 @@ def _audio_frames(args: argparse.Namespace) -> Iterable[np.ndarray]:
         return raw_stdin_frames(block_size=args.block_size)
 
     return wav_frames(args.input, block_size=args.block_size)
+
+
+def _embed_output_path(embed_arg: str | None) -> Path:
+    if not embed_arg:
+        return default_embedded_output_path(Path(sys.argv[0]))
+    return Path(embed_arg)
 
 
 def _status(args: argparse.Namespace, model: object) -> None:
