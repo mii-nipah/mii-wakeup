@@ -7,14 +7,14 @@ The default behavior is intentionally pipe-friendly: listen until a wake word is
 detected, print the confidence score on stdout, then exit.
 
 ```sh
-uv run mii-wakeup --model /home/nipah/Downloads/ai/weights/hey_meee.onnx \
+mii-wakeup --model /home/nipah/Downloads/ai/weights/hey_meee.onnx \
   && echo "now I'm awake"
 ```
 
 For shell pipelines, consume the event line:
 
 ```sh
-uv run mii-wakeup --model /home/nipah/Downloads/ai/weights/hey_meee.onnx |
+mii-wakeup --model /home/nipah/Downloads/ai/weights/hey_meee.onnx |
   while read -r _event; do
     echo "now I'm awake"
   done
@@ -23,17 +23,14 @@ uv run mii-wakeup --model /home/nipah/Downloads/ai/weights/hey_meee.onnx |
 ## Usage
 
 ```sh
-uv run mii-wakeup --model ./hey_meee.onnx
-uv run mii-wakeup --model ./hey_meee.onnx --stream
-uv run mii-wakeup --model ./hey_meee.onnx --stream --output json
-uv run mii-wakeup --list-devices
+mii-wakeup --model ./hey_meee.onnx
+mii-wakeup --model ./hey_meee.onnx --stream
+mii-wakeup --model ./hey_meee.onnx --stream --output json
+mii-wakeup --list-devices
 ```
 
-When running from the uv environment, omitting `--model` lets openWakeWord load
-its bundled pre-trained wake-word models. The slim Nuitka build below excludes
-those demo wake-word models, so packaged binaries should be run with `--model`.
-Custom `.onnx` models can be provided more than once with repeated `--model`
-flags.
+Packaged binaries expect a wake-word `.onnx` model with `--model`. Custom
+models can be provided more than once with repeated `--model` flags.
 
 The microphone path uses mono 16 kHz signed 16-bit audio in 1280-sample frames,
 matching openWakeWord's 80 ms frame recommendation. On Linux, `sounddevice`
@@ -48,9 +45,9 @@ file. Stdin must be mono signed 16-bit 16 kHz PCM:
 
 ```sh
 arecord -q -r 16000 -f S16_LE -c 1 |
-  uv run mii-wakeup --model ./hey_meee.onnx --input -
+  mii-wakeup --model ./hey_meee.onnx --input -
 
-uv run mii-wakeup --model ./hey_meee.onnx --input ./sample.wav
+mii-wakeup --model ./hey_meee.onnx --input ./sample.wav
 ```
 
 ## Embedded Clones
@@ -77,33 +74,27 @@ path because packaged mii-wakeup expects users to pass their wake-word `.onnx`
 with `--model`.
 
 ```sh
-uv run python -m nuitka \
-  --mode=onefile \
-  --output-dir=dist \
-  --output-filename=mii-wakeup \
-  --include-data-files=.venv/lib/python3.13/site-packages/openwakeword/resources/models/melspectrogram.onnx=openwakeword/resources/models/melspectrogram.onnx \
-  --include-data-files=.venv/lib/python3.13/site-packages/openwakeword/resources/models/embedding_model.onnx=openwakeword/resources/models/embedding_model.onnx \
-  --include-data-files=.venv/lib/python3.13/site-packages/openwakeword/resources/models/silero_vad.onnx=openwakeword/resources/models/silero_vad.onnx \
-  --include-data-files=.venv/lib/python3.13/site-packages/onnxruntime/capi/libonnxruntime_providers_shared.so=onnxruntime/capi/libonnxruntime_providers_shared.so \
-  --include-module=openwakeword.model \
-  --include-module=openwakeword.utils \
-  --include-module=openwakeword.vad \
-  --include-package=sounddevice \
-  --include-package=mii_wakeup \
-  --nofollow-import-to=openwakeword.custom_verifier_model \
-  --nofollow-import-to=scipy \
-  --nofollow-import-to=sklearn \
-  --nofollow-import-to=joblib \
-  --nofollow-import-to=tqdm \
-  --nofollow-import-to=onnxruntime.backend \
-  --nofollow-import-to=onnxruntime.tools \
-  --nofollow-import-to=onnxruntime.quantization \
-  --nofollow-import-to=onnxruntime.transformers \
-  --noinclude-unittest-mode=nofollow \
-  --python-flag=no_docstrings \
-  --python-flag=no_asserts \
-  main.py
+uv run ./scripts/build-onefile.sh
 ```
 
 The user's custom wake-word `.onnx` file remains external and should be passed
-with `--model`.
+with `--model`. The script keeps Nuitka's build directories under `dist/`, so
+repeated local builds can reuse as much work as Nuitka and the C compiler allow.
+
+When developing from a checkout, run the command through uv:
+
+```sh
+uv run mii-wakeup --model ./hey_meee.onnx
+```
+
+## Releases
+
+Releases are automated from the version in `pyproject.toml`. To ship a new
+downloadable Linux x86_64 binary, edit the version, commit, and push to `main`.
+The GitHub Actions release workflow skips pushes whose `v<version>` tag already
+exists; new versions run the tests, build the Nuitka one-file binary, create the
+tag, and upload a tarball plus `SHA256SUMS` to GitHub Releases.
+
+## License
+
+BSD-3-Clause.

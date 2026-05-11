@@ -1,0 +1,123 @@
+name: Release
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and release Linux binary
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Cache C compiler output
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ccache
+          key: ccache-${{ runner.os }}-${{ hashFiles('pyproject.toml', 'uv.lock', 'main.py', 'src/**', 'scripts/build-onefile.sh') }}
+          restore-keys: |
+            ccache-${{ runner.os }}-
+
+      - name: Install system build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ccache portaudio19-dev
+
+      - name: Install Python dependencies
+        run: uv sync --locked --dev
+
+      - name: Read version
+        id: version
+        run: |
+          version="$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+
+      - name: Check whether tag already exists
+        id: tag_check
+        run: |
+          if git rev-parse -q --verify "refs/tags/${{ steps.version.outputs.tag }}" >/dev/null; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Tag ${{ steps.version.outputs.tag }} already exists; release is a no-op."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run tests
+        if: steps.tag_check.outputs.exists == 'false'
+        run: uv run python -m unittest discover -v
+
+      - name: Build one-file binary
+        if: steps.tag_check.outputs.exists == 'false'
+        run: uv run ./scripts/build-onefile.sh --output-filename mii-wakeup-linux-x86_64
+
+      - name: Smoke-test binary
+        if: steps.tag_check.outputs.exists == 'false'
+        run: |
+          ./dist/mii-wakeup-linux-x86_64 --version
+          ./dist/mii-wakeup-linux-x86_64 --help >/dev/null
+
+      - name: Package release assets
+        if: steps.tag_check.outputs.exists == 'false'
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          asset_dir="dist/mii-wakeup-$version-linux-x86_64"
+          archive="dist/mii-wakeup-$version-linux-x86_64.tar.gz"
+
+          mkdir -p "$asset_dir"
+          install -m 0755 dist/mii-wakeup-linux-x86_64 "$asset_dir/mii-wakeup"
+          cp README.md LICENSE "$asset_dir/"
+          tar -C dist -czf "$archive" "mii-wakeup-$version-linux-x86_64"
+          (cd dist && sha256sum "mii-wakeup-$version-linux-x86_64.tar.gz" > SHA256SUMS)
+
+      - name: Tag release
+        if: steps.tag_check.outputs.exists == 'false'
+        run: |
+          tag="${{ steps.version.outputs.tag }}"
+          version="${{ steps.version.outputs.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$tag" -m "mii-wakeup $version"
+          git push origin "$tag"
+
+      - name: Create GitHub release
+        if: steps.tag_check.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${{ steps.version.outputs.tag }}"
+          version="${{ steps.version.outputs.version }}"
+          prerelease_flag=()
+          if [[ "$version" == *-* ]]; then
+            prerelease_flag=(--prerelease)
+          fi
+
+          gh release create "$tag" \
+            "dist/mii-wakeup-$version-linux-x86_64.tar.gz" \
+            "dist/SHA256SUMS" \
+            --title "mii-wakeup $version" \
+            --generate-notes \
+            "${prerelease_flag[@]}"
